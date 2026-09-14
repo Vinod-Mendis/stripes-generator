@@ -1,7 +1,10 @@
 export interface ExportStroke {
+  id: string;
   d: string; // SVG path data
   color: string;
   fill: string; // perfect-freehand paths are filled, not stroked
+  isFading?: boolean;
+  fadeColor?: string;
 }
 
 /**
@@ -15,14 +18,27 @@ export function buildSVGString(
   width: number,
   height: number
 ): string {
-  const paths = strokes
-    .map(
-      (s) =>
-        `  <path d="${s.d}" fill="${s.color}" stroke="none" />`
-    )
+  const defs = strokes
+    .filter((s) => s.isFading)
+    .map((s) => {
+      const isTransparent = s.fadeColor === "transparent";
+      return `    <linearGradient id="grad-${s.id}" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="${s.color}" />
+      <stop offset="100%" stopColor="${isTransparent ? s.color : s.fadeColor}" stopOpacity="${isTransparent ? 0 : 1}" />
+    </linearGradient>`;
+    })
     .join("\n");
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  const defsStr = defs ? `\n  <defs>\n${defs}\n  </defs>` : "";
+
+  const paths = strokes
+    .map((s) => {
+      const fill = s.isFading ? `url(#grad-${s.id})` : s.color;
+      return `  <path d="${s.d}" fill="${fill}" stroke="none" />`;
+    })
+    .join("\n");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${defsStr}
   <rect width="${width}" height="${height}" fill="${bg}" />
 ${paths}
 </svg>`;

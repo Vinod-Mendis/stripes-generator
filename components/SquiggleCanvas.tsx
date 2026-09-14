@@ -15,6 +15,8 @@ interface Stroke {
   id: string;
   d: string;
   color: string;
+  isFading?: boolean;
+  fadeColor?: string;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -49,6 +51,8 @@ export default function SquiggleCanvas() {
   const [smoothing, setSmoothing] = useState(DEFAULT_SMOOTHING);
   const [stripeCount, setStripeCount] = useState(DEFAULT_STRIPE_COUNT);
   const [thicknessMode, setThicknessMode] = useState<ThicknessMode>("uniform");
+  const [isFading, setIsFading] = useState(false);
+  const [fadeColor, setFadeColor] = useState<string>("transparent");
 
   // Refs — survive re-renders without stale-closure risk
   const svgRef = useRef<SVGSVGElement>(null);
@@ -60,10 +64,15 @@ export default function SquiggleCanvas() {
   const strokeWidthRef = useRef(strokeWidth);
   const smoothingRef = useRef(smoothing);
   const thicknessModeRef = useRef(thicknessMode);
+  const isFadingRef = useRef(isFading);
+  const fadeColorRef = useRef(fadeColor);
+  
   strokeColorRef.current = strokeColor;
   strokeWidthRef.current = strokeWidth;
   smoothingRef.current = smoothing;
   thicknessModeRef.current = thicknessMode;
+  isFadingRef.current = isFading;
+  fadeColorRef.current = fadeColor;
 
   // Undo / redo stacks
   const undoStack = useRef<Stroke[][]>([]);
@@ -122,6 +131,8 @@ export default function SquiggleCanvas() {
       id: crypto.randomUUID(),
       d,
       color: strokeColorRef.current,
+      isFading: isFadingRef.current,
+      fadeColor: fadeColorRef.current,
     };
 
     const current = strokesRef.current;
@@ -190,6 +201,8 @@ export default function SquiggleCanvas() {
       id: crypto.randomUUID(),
       d: g.d,
       color: g.color,
+      isFading: isFadingRef.current,
+      fadeColor: fadeColorRef.current,
     }));
 
     const current = strokesRef.current;
@@ -205,9 +218,12 @@ export default function SquiggleCanvas() {
     if (!el) return;
     const { width, height } = el.getBoundingClientRect();
     const exportStrokes: ExportStroke[] = strokes.map((s) => ({
+      id: s.id,
       d: s.d,
       color: s.color,
       fill: s.color,
+      isFading: s.isFading,
+      fadeColor: s.fadeColor,
     }));
     downloadSVG(exportStrokes, bgColor, Math.round(width), Math.round(height));
   }, [strokes, bgColor]);
@@ -239,10 +255,58 @@ export default function SquiggleCanvas() {
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerLeave}
         >
+          <defs>
+            {strokes
+              .filter((s) => s.isFading)
+              .map((s) => (
+                <linearGradient
+                  key={s.id}
+                  id={`grad-${s.id}`}
+                  x1="0%"
+                  y1="0%"
+                  x2="100%"
+                  y2="100%"
+                >
+                  <stop offset="0%" stopColor={s.color} />
+                  <stop
+                    offset="100%"
+                    stopColor={s.fadeColor === "transparent" ? s.color : s.fadeColor}
+                    stopOpacity={s.fadeColor === "transparent" ? 0 : 1}
+                  />
+                </linearGradient>
+              ))}
+            {livePath && isFading && (
+              <linearGradient
+                id="grad-live"
+                x1="0%"
+                y1="0%"
+                x2="100%"
+                y2="100%"
+              >
+                <stop offset="0%" stopColor={strokeColor} />
+                <stop
+                  offset="100%"
+                  stopColor={fadeColor === "transparent" ? strokeColor : fadeColor}
+                  stopOpacity={fadeColor === "transparent" ? 0 : 1}
+                />
+              </linearGradient>
+            )}
+          </defs>
           {strokes.map((s) => (
-            <path key={s.id} d={s.d} fill={s.color} stroke="none" />
+            <path
+              key={s.id}
+              d={s.d}
+              fill={s.isFading ? `url(#grad-${s.id})` : s.color}
+              stroke="none"
+            />
           ))}
-          {livePath && <path d={livePath} fill={strokeColor} stroke="none" />}
+          {livePath && (
+            <path
+              d={livePath}
+              fill={isFading ? "url(#grad-live)" : strokeColor}
+              stroke="none"
+            />
+          )}
         </svg>
 
         {strokes.length === 0 && !livePath && (
@@ -316,6 +380,60 @@ export default function SquiggleCanvas() {
               />
             </label>
           </div>
+        </Section>
+
+        {/* Fade / Gradient */}
+        <Section label="Fade Effect">
+          <label className="flex items-center gap-2 cursor-pointer mb-2">
+            <input
+              type="checkbox"
+              checked={isFading}
+              onChange={(e) => setIsFading(e.target.checked)}
+              className="w-4 h-4 accent-zinc-800 rounded border-zinc-300"
+            />
+            <span className="text-sm font-medium text-zinc-700">Enable fade</span>
+          </label>
+          {isFading && (
+            <div className="flex flex-wrap gap-2 mt-1">
+              <button
+                onClick={() => setFadeColor("transparent")}
+                className="w-7 h-7 rounded-full border border-zinc-200 bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%228%22 height=%228%22><rect width=%224%22 height=%224%22 fill=%22%23ddd%22/><rect x=%224%22 y=%224%22 width=%224%22 height=%224%22 fill=%22%23ddd%22/><rect x=%224%22 width=%224%22 height=%224%22 fill=%22%23fff%22/><rect y=%224%22 width=%224%22 height=%224%22 fill=%22%23fff%22/></svg>')] transition-transform hover:scale-110"
+                style={{
+                  boxShadow: fadeColor === "transparent"
+                    ? "0 0 0 2px white, 0 0 0 4px #a1a1aa"
+                    : "0 0 0 1px rgba(0,0,0,0.12)"
+                }}
+                title="Fade to transparent"
+              />
+              {PALETTE.map((c) => (
+                <ColorSwatch
+                  key={c}
+                  color={c}
+                  selected={fadeColor === c}
+                  onClick={() => setFadeColor(c)}
+                />
+              ))}
+              <label
+                className="relative w-7 h-7 rounded-full overflow-hidden border-2 border-zinc-300 cursor-pointer flex-shrink-0"
+                title="Custom fade color"
+              >
+                <span className="sr-only">Custom fade color</span>
+                <span
+                  className="absolute inset-0 rounded-full"
+                  style={{
+                    background:
+                      "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                  }}
+                />
+                <input
+                  type="color"
+                  value={fadeColor !== "transparent" ? fadeColor : "#ffffff"}
+                  onChange={(e) => setFadeColor(e.target.value)}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                />
+              </label>
+            </div>
+          )}
         </Section>
 
         {/* Background */}
