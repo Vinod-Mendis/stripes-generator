@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { buildStrokePath, type Point, type ThicknessMode } from "@/lib/smoothing";
 import { generateRandomStripes } from "@/lib/stripes";
 import {
@@ -179,6 +179,45 @@ export default function SquiggleCanvas() {
     redoStack.current = [];
     setStrokes([]);
   }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in a text input
+      if (
+        e.target instanceof HTMLInputElement &&
+        e.target.type !== "range" &&
+        e.target.type !== "color" &&
+        e.target.type !== "checkbox"
+      ) {
+        return;
+      }
+
+      const modifier = e.ctrlKey || e.metaKey;
+      if (modifier) {
+        const key = e.key.toLowerCase();
+        
+        // Undo: Ctrl+Z (without shift)
+        if (key === "z" && !e.shiftKey) {
+          e.preventDefault();
+          undo();
+        }
+        
+        // Redo: Ctrl+Shift+Y, Ctrl+Y, or Ctrl+Shift+Z
+        if (
+          (key === "y" && e.shiftKey) || 
+          (key === "y" && !e.shiftKey) || 
+          (key === "z" && e.shiftKey)
+        ) {
+          e.preventDefault();
+          redo();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo]);
 
   // ── Generate random stripes ──────────────────────────────────────────────
 
