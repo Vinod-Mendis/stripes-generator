@@ -88,10 +88,21 @@ export default function SquiggleCanvas() {
     (e: React.PointerEvent<SVGSVGElement>) => {
       if (!isDrawingRef.current) return;
       e.preventDefault();
-      livePointsRef.current = [
-        ...livePointsRef.current,
-        [e.clientX, e.clientY, e.pressure || 0.5],
-      ];
+
+      const native = e.nativeEvent;
+      const events =
+        typeof native?.getCoalescedEvents === "function"
+          ? native.getCoalescedEvents()
+          : [e];
+
+      for (const ev of events) {
+        livePointsRef.current.push([
+          ev.clientX,
+          ev.clientY,
+          ev.pressure || 0.5,
+        ]);
+      }
+
       const d = buildStrokePath(livePointsRef.current, {
         strokeWidth: strokeWidthRef.current,
         smoothing: smoothingRef.current,
@@ -110,7 +121,7 @@ export default function SquiggleCanvas() {
     livePointsRef.current = [];
     setLivePath("");
 
-    if (points.length < 2) return;
+    if (points.length === 0) return;
 
     const d = buildStrokePath(points, {
       strokeWidth: strokeWidthRef.current,
